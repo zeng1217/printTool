@@ -34,10 +34,10 @@ jobs:
         with:
           workspaces: desktop/src-tauri
 
-      # 5. 安装前端依赖
+      # 5. 安装前端依赖（用 npm install，仓库无 lockfile 时也能自动生成）
       - name: Install npm deps
         working-directory: desktop
-        run: npm ci
+        run: npm install
 
       # 6. 打包（tauri build，生成 NSIS exe + msi）
       - name: Build Tauri app
