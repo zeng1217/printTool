@@ -18,11 +18,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. 安装 Node.js（不启用 npm 缓存，避免 Windows 路径解析报错）
+      # 2. 安装 Node.js + yarn（项目用 yarn 管理依赖，避开 npm 可选原生依赖 bug）
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - name: Setup Yarn
+        run: corepack enable && corepack prepare yarn@1.22.19 --activate
 
       # 3. 安装 Rust（MSVC 工具链）
       - name: Setup Rust
@@ -34,15 +37,15 @@ jobs:
         with:
           workspaces: desktop/src-tauri
 
-      # 5. 安装前端依赖（用 lockfile + npm ci，避免 npm 实时解析依赖树的 edgesOut 崩溃）
-      - name: Install npm deps
+      # 5. 安装前端依赖（yarn 按当前平台拉取 win32-msvc 原生二进制）
+      - name: Install deps
         working-directory: desktop
-        run: npm ci --no-audit --no-fund
+        run: yarn install --frozen-lockfile
 
       # 6. 打包（tauri build，生成 NSIS exe + msi）
       - name: Build Tauri app
         working-directory: desktop
-        run: npm run build
+        run: yarn build
 
       # 7. 上传安装包为构建产物（可在页面下载）
       - name: Upload installer
