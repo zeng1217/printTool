@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "抖店监听打单",
+  "version": "0.1.0",
+  "identifier": "com.doudian.print",
+  "build": {
+    "beforeDevCommand": "npm run fe:dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run fe:build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "抖店监听打单",
+        "width": 1040,
+        "height": 800,
+        "minWidth": 880,
+        "minHeight": 640,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "wix": null,
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

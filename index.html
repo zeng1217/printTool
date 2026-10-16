@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>直播间专属播单 (Live Server 70x50mm专用)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            padding: 16px;
+            background-color: #f0f2f5;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+            color: #111;
+        }
+
+        .layout {
+            display: flex;
+            gap: 20px;
+            max-width: 980px;
+            margin: 0 auto;
+        }
+
+        .control-panel {
+            flex: 1.1;
+            background: #fff;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            height: fit-content;
+        }
+
+        .preview-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .panel-title {
+            font-size: 15px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .form-item {
+            margin-bottom: 8px;
+        }
+
+        .form-item label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 2px;
+        }
+
+        .form-item input,
+        .form-item textarea {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .form-item input:focus,
+        .form-item textarea:focus {
+            border-color: #1890ff;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 9px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .btn-success {
+            background-color: #52c41a;
+            color: #fff;
+        }
+
+        .btn-primary {
+            background-color: #1890ff;
+            color: #fff;
+        }
+
+        /* ================= 屏幕正常预览区 ================= */
+        .ticket-wrapper {
+            width: 70mm;
+            height: 50mm;
+            background: #fff;
+            padding: 2.5mm 3mm;
+            border: 1px dashed #1890ff;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            font-family: -apple-system, BlinkMacSystemFont, "SimSun", "Microsoft YaHei", sans-serif;
+            color: #000;
+            overflow: hidden;
+        }
+
+        .ticket-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 1mm;
+        }
+
+        .ticket-nickname-box {
+            display: flex;
+            align-items: baseline;
+            margin-bottom: 1mm;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .ticket-nickname-label {
+            font-size: 14px;
+            font-weight: 900;
+        }
+
+        .ticket-nickname-val {
+            font-size: 18px;
+            font-weight: 900;
+            line-height: 1.1;
+            margin-left: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .ticket-receiver-box {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            font-weight: 600;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 1mm;
+            margin-bottom: 1mm;
+            line-height: 1.2;
+        }
+
+        .ticket-goods-title {
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1.25;
+            max-height: 2.5em;
+            overflow: hidden;
+            margin-bottom: 0.8mm;
+        }
+
+        .ticket-goods-notice {
+            font-size: 8.5px;
+            line-height: 1.2;
+            color: #222;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .ticket-footer-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 10px;
+            font-weight: 700;
+            border-top: 1px dashed #999;
+            padding-top: 1mm;
+        }
+
+        .ticket-footer-notice {
+            font-size: 8px;
+            text-align: center;
+            font-weight: 600;
+            line-height: 1;
+            margin-top: 0.5mm;
+        }
+
+        /* ================= 针对汉印热敏纸修正打印样式 ================= */
+        @media print {
+            @page {
+                size: 70mm 50mm landscape;
+                margin: 0mm !important;
+            }
+
+            html,
+            body {
+                width: 100% !important;
+                height: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #fff !important;
+                overflow: hidden !important;
+            }
+
+            body>.layout>.control-panel,
+            .preview-panel>div:first-child {
+                display: none !important;
+            }
+
+            .layout {
+                display: block !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .preview-panel {
+                display: block !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            #printableTicket {
+                position: static !important;
+                width: 70mm !important;
+                height: 50mm !important;
+                max-width: 70mm !important;
+                max-height: 50mm !important;
+                box-shadow: none !important;
+                border: none !important;
+                padding: 2mm 3mm !important;
+                margin: 0 !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                page-break-after: avoid !important;
+                page-break-inside: avoid !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="layout">
+        <!-- 操作面板 -->
+        <div class="control-panel">
+            <div class="panel-title">🏷️ 直播打单台 (汉印 70×50mm 纯净版)</div>
+
+            <div class="form-item">
+                <label>单号 / 排序</label>
+                <input type="text" id="orderSeq" value="" placeholder="等待新订单..." oninput="renderTicket()" />
+            </div>
+            <div class="form-item">
+                <label>店铺名称</label>
+                <input type="text" id="shopName" value="" placeholder="输入或自动获取店铺名" oninput="renderTicket()" />
+            </div>
+            <div class="form-item">
+                <label>买家抖音昵称</label>
+                <input type="text" id="nickname" value="" placeholder="等待买家昵称..." oninput="renderTicket()"
+                    style="font-weight:bold; font-size:14px; color:#e65100;" />
+            </div>
+            <div class="form-item">
+                <label>收货人与省市区</label>
+                <div style="display:flex; gap:6px;">
+                    <input type="text" id="receiverName" value="" placeholder="收件人" style="width:65px;"
+                        oninput="renderTicket()" />
+                    <input type="text" id="receiverArea" value="" placeholder="省市区收件地址" oninput="renderTicket()" />
+                </div>
+            </div>
+            <div class="form-item">
+                <label>商品名称 / 规格</label>
+                <input type="text" id="goodsTitle" value="" placeholder="等待商品名称..." oninput="renderTicket()" />
+            </div>
+            <div class="form-item">
+                <label>自选规则 / 说明备注</label>
+                <textarea id="goodsNotice" rows="2" placeholder="输入打印在小票上的自选规则或备注说明..."
+                    oninput="renderTicket()"></textarea>
+            </div>
+            <div class="form-item">
+                <label>数量与实付金额</label>
+                <div style="display:flex; gap:6px;">
+                    <input type="text" id="goodsQty" value="1" style="width:60px;" oninput="renderTicket()" />
+                    <input type="text" id="orderPrice" value="" placeholder="金额" oninput="renderTicket()" />
+                </div>
+            </div>
+            <div class="form-item">
+                <label>下单时间</label>
+                <input type="text" id="orderTime" value="" placeholder="下单时间" oninput="renderTicket()" />
+            </div>
+            <div class="form-item">
+                <label>订单编号</label>
+                <input type="text" id="orderCode" value="" placeholder="订单编号" oninput="renderTicket()" />
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-success" onclick="triggerPrint()">🖨️ 打印该标签</button>
+                <button class="btn btn-primary" onclick="simulateLocalOrder()">本地模拟出单</button>
+            </div>
+
+            <div style="margin-top: 10px; display:flex; align-items:center; gap:6px; font-size:12px; color:#666;">
+                <input type="checkbox" id="autoPrintSwitch" checked />
+                <label for="autoPrintSwitch" style="cursor:pointer;">收到新单时自动打单</label>
+            </div>
+        </div>
+
+        <!-- 70x50 预览卡片 -->
+        <div class="preview-panel">
+            <div style="font-size:12px; color:#888; margin-bottom:6px;">★ 70×50mm 标签纸预览 ★</div>
+
+            <div class="ticket-wrapper" id="printableTicket">
+                <div>
+                    <div class="ticket-header">
+                        <span id="viewOrderSeq"></span>
+                        <span id="viewShopName"></span>
+                    </div>
+
+                    <div class="ticket-nickname-box">
+                        <span class="ticket-nickname-label">昵称:</span>
+                        <span class="ticket-nickname-val" id="viewNickname"></span>
+                    </div>
+
+                    <div class="ticket-receiver-box">
+                        <span id="viewReceiverName"></span>
+                        <span id="viewReceiverArea"></span>
+                    </div>
+
+                    <div class="ticket-goods-title" id="viewGoodsTitle"></div>
+
+                    <div class="ticket-goods-notice" id="viewGoodsNotice"></div>
+                </div>
+
+                <div>
+                    <div class="ticket-footer-row">
+                        <span>数量:<span id="viewGoodsQty">1</span> 金额:<span id="viewOrderPrice"></span></span>
+                        <span id="viewOrderTime" style="font-size:8.5px;"></span>
+                    </div>
+                    <div class="ticket-footer-notice">
+                        单号:<span id="viewOrderCode"></span> (一经售出概不退换)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function renderTicket() {
+            var fields = [
+                ['viewOrderSeq', 'orderSeq'],
+                ['viewShopName', 'shopName'],
+                ['viewNickname', 'nickname'],
+                ['viewReceiverName', 'receiverName'],
+                ['viewReceiverArea', 'receiverArea'],
+                ['viewGoodsTitle', 'goodsTitle'],
+                ['viewGoodsNotice', 'goodsNotice'],
+                ['viewGoodsQty', 'goodsQty'],
+                ['viewOrderPrice', 'orderPrice'],
+                ['viewOrderTime', 'orderTime'],
+                ['viewOrderCode', 'orderCode']
+            ];
+            fields.forEach(function (item) {
+                var viewEl = document.getElementById(item[0]);
+                var inputEl = document.getElementById(item[1]);
+                if (viewEl && inputEl) {
+                    viewEl.innerText = inputEl.value;
+                }
+            });
+        }
+
+        function triggerPrint() {
+            try {
+                window.focus();
+                window.print();
+            } catch (err) {
+                console.error('【打单页】调起打印异常:', err);
+            }
+        }
+
+        function handleIncomingOrder(data) {
+            if (!data || !data.nickname) return;
+            console.log('【打单页】接收并写入新订单:', data);
+
+            var setVal = function (id, val) {
+                var el = document.getElementById(id);
+                if (el && val !== undefined && val !== null) {
+                    el.value = val;
+                }
+            };
+
+            setVal('nickname', data.nickname);
+            if (data.orderTime) setVal('orderTime', data.orderTime);
+            if (data.goodsName) setVal('goodsTitle', data.goodsName);
+            if (data.orderId) setVal('orderCode', data.orderId);
+            if (data.orderSeq) setVal('orderSeq', data.orderSeq);
+            if (data.receiverName) setVal('receiverName', data.receiverName);
+            if (data.receiverArea) setVal('receiverArea', data.receiverArea);
+            if (data.orderPrice) setVal('orderPrice', data.orderPrice);
+            if (data.shopName) setVal('shopName', data.shopName);
+
+            renderTicket();
+
+            var autoSwitch = document.getElementById('autoPrintSwitch');
+            if (autoSwitch && autoSwitch.checked) {
+                setTimeout(function () {
+                    triggerPrint();
+                }, 200);
+            }
+        }
+
+        function simulateLocalOrder() {
+            handleIncomingOrder({
+                orderSeq: '第1单',
+                shopName: '集芙宝藏小铺',
+                nickname: '小锦鲤发饰自选',
+                orderTime: new Date().toLocaleTimeString(),
+                goodsName: '【现拍自选】发绳发饰包邮',
+                orderId: '691' + String(Date.now()).slice(-10),
+                orderPrice: '20.00',
+                receiverName: '李*',
+                receiverArea: '陕西省西安市长安区'
+            });
+        }
+
+        window.addEventListener('message', function (event) {
+            if (event.data && event.data.type === 'DOUYIN_ORDER_DATA') {
+                console.log('【打单页】监听到抖店跨域推送:', event.data.data);
+                handleIncomingOrder(event.data.data);
+            }
+        });
+
+        renderTicket();
+        console.warn('【打单服务】页面就绪，等待抖店推单...');
+    </script>
+</body>
+
+</html>

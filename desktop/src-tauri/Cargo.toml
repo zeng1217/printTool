@@ -1,0 +1,31 @@
+[package]
+name = "doudian-print"
+version = "0.1.0"
+description = "抖店订单监听与标签打印"
+edition = "2021"
+
+[lib]
+name = "doudian_print_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.21"
+futures-util = "0.3"
+reqwest = { version = "0.12", features = ["json"] }
+encoding_rs = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = ["Win32_Graphics_Printing", "Win32_Foundation"] }
+
+[features]
+# 开发期默认关闭 custom-protocol，正式构建由 tauri 自动开启
+custom-protocol = ["tauri/custom-protocol"]
