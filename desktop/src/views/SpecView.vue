@@ -1,9 +1,33 @@
 <script setup>
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import CanvasEditor from '../components/CanvasEditor.vue';
+import TicketCanvas from '../components/TicketCanvas.vue';
 import {
   cfg, layout, printerList, saveSettings, onLayoutSave,
   refreshPrinters, onConnKindChange, doPrint,
 } from '../store';
+
+// 窗口缩到很窄时（≤ 断点）不渲染拖拽编辑器，仅展示已保存布局的静态预览
+const EDIT_BREAKPOINT = 820;
+const mq = window.matchMedia(`(max-width: ${EDIT_BREAKPOINT}px)`);
+const tiny = ref(mq.matches);
+function onMediaChange(e) { tiny.value = e.matches; }
+onMounted(() => {
+  if (mq.addEventListener) mq.addEventListener('change', onMediaChange);
+  else mq.addListener(onMediaChange);
+});
+onBeforeUnmount(() => {
+  if (mq.removeEventListener) mq.removeEventListener('change', onMediaChange);
+  else mq.removeListener(onMediaChange);
+});
+
+// 只读预览用示例数据填充字段（不改动真实订单）
+const previewData = {
+  orderSeq: '第1单', shopName: cfg.shopName || '示例店铺', nickname: '小锦鲤',
+  receiverName: '李*', receiverArea: '陕西省西安市长安区',
+  goodsName: '【发饰自选】高颜值发绳', goodsNotice: cfg.goodsNotice || '',
+  goodsQty: '1', orderPrice: '20.00', orderTime: '2026-01-01 12:00:00', orderId: '6918366037883038',
+};
 </script>
 
 <template>
@@ -78,7 +102,29 @@ import {
   <div class="section">
     <div class="section-title"><span class="t-left"><span class="bar"></span>拖拽排版画布</span></div>
     <div class="section-desc">左侧添加字段/文字/分割线，中间拖动与缩放，右侧调属性，完成后点“保存布局”</div>
-    <CanvasEditor v-model="layout" :paper-w="cfg.paperW" :paper-h="cfg.paperH" @save="onLayoutSave" />
+    <CanvasEditor v-if="!tiny" v-model="layout" :paper-w="cfg.paperW" :paper-h="cfg.paperH" @save="onLayoutSave" />
+    <div v-else class="layout-readonly">
+      <div class="ro-hint">窗口较小，仅显示已保存的布局预览；放大窗口即可继续编辑</div>
+      <div class="ro-stage">
+        <div class="preview-scale" :style="{ width: layout.Wd * 3.78 + 'px', height: layout.Hd * 3.78 + 'px' }">
+          <TicketCanvas :layout="layout" :data="previewData" />
+        </div>
+      </div>
+    </div>
   </div>
   </div>
 </template>
+
+<style scoped>
+.layout-readonly { display: flex; flex-direction: column; gap: 10px; }
+.ro-hint {
+  font-size: 12.5px; color: var(--text-3);
+  background: var(--primary-weak); border: 1px solid rgba(51, 112, 255, 0.18);
+  border-radius: 8px; padding: 8px 12px;
+}
+.ro-stage {
+  display: flex; overflow: auto; padding: 16px; min-height: 260px;
+  background: #f7f8fa; border: 1px solid var(--border-weak); border-radius: 10px;
+}
+.ro-stage .preview-scale { margin: auto; box-shadow: var(--shadow-md); border: 1px solid var(--border-weak); }
+</style>

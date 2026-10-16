@@ -1,5 +1,9 @@
 <script setup>
-import { history, keyword, refreshHistory, fillTicket, doPrint } from '../store';
+import { useRouter } from 'vue-router';
+import { Message } from '@arco-design/web-vue';
+import { history, keyword, refreshHistory, fillTicket } from '../store';
+
+const router = useRouter();
 
 const columns = [
   { title: '序号', dataIndex: 'seq', width: 96 },
@@ -11,9 +15,11 @@ const columns = [
   { title: '操作', slotName: 'op', width: 96, align: 'center', fixed: 'right' },
 ];
 
+// 重新打印：不静默直打，而是载入该单并切至打单台预览，确认后手动打印
 function reprint(row) {
-  fillTicket(row, true);
-  doPrint();
+  fillTicket(row, false);
+  Message.success(`已载入订单 #${row.seq}，在打单台预览后点击“打印该标签”`);
+  router.push('/desk');
 }
 </script>
 

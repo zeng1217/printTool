@@ -1,11 +1,13 @@
 // 跨页面共享的状态与逻辑（打单台/打印规格/历史订单 三个路由页都从这里读写）
-import { reactive, ref, nextTick } from 'vue';
+import { reactive, ref, nextTick, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen, emitTo } from '@tauri-apps/api/event';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import Message from '@arco-design/web-vue/es/message';
 import { initDb, saveOrder, listOrders, getSetting, setSetting } from './db';
 import { buildPrintCss, printTicket } from './print';
 import { loadLayout, saveLayout, defaultLayout } from './layout';
+import { applyTheme } from './theme';
 
 // 打印配置（可自定义尺寸，落库持久化）
 export const cfg = reactive({
@@ -19,6 +21,7 @@ export const cfg = reactive({
   connKind: 'auto', // auto / usb / tcp
   printerName: '',
   tcpAddr: '',
+  themeColor: '#3370ff',
 });
 
 export const running = ref(false);
@@ -138,6 +141,7 @@ export async function saveSettings() {
   await setSetting('connKind', cfg.connKind);
   await setSetting('printerName', cfg.printerName);
   await setSetting('tcpAddr', cfg.tcpAddr);
+  await setSetting('themeColor', cfg.themeColor);
   loadSettingsToTicket();
   // 尺寸变化时同步画布内容盒（坐标不变，用户可再调）
   layout.value.Wd = cfg.paperH;
@@ -178,6 +182,8 @@ export async function initStore() {
   cfg.connKind = await getSetting('connKind', 'auto');
   cfg.printerName = await getSetting('printerName', '');
   cfg.tcpAddr = await getSetting('tcpAddr', '');
+  cfg.themeColor = await getSetting('themeColor', '#3370ff');
+  applyTheme(cfg.themeColor);
   loadSettingsToTicket();
   layout.value = await loadLayout(cfg.paperW, cfg.paperH);
   await refreshHistory();
@@ -189,4 +195,57 @@ export async function initStore() {
     running.value = false;
     Message.error('监听异常: ' + ev.payload);
   });
+
+  // 独立标签预览窗口：初次请求 + 数据变化时推送当前票面（仅主窗口运行）
+  await listen('ticket-request', () => forwardToLabel());
+  watchSyncToLabel();
+}
+
+// —— 独立标签预览窗口 ——
+// 把当前 ticket + layout 推送到 label 窗口（窗口不存在时 emitTo 会失败，忽略即可）
+export function forwardToLabel() {
+  const payload = { ticket: { ...ticket }, layout: JSON.parse(JSON.stringify(layout.value)) };
+  emitTo('label', 'ticket-sync', payload).catch(() => {});
+}
+
+// 打开（或聚焦已存在的）独立标签预览窗口
+export async function openLabelWindow() {
+  // 注意：getByLabel 是异步的（返回 Promise），必须 await，否则 Promise 恒为真
+  const existing = await WebviewWindow.getByLabel('label');
+  if (existing) {
+    try { await existing.setFocus(); } catch (e) { /* 忽略 */ }
+    return;
+  }
+  const w = new WebviewWindow('label', {
+    title: '标签预览',
+    width: 340,
+    height: 480,
+    alwaysOnTop: true,
+    resizable: true,
+    focus: true,
+  });
+  w.once('tauri://created', () => setTimeout(forwardToLabel, 400));
+  w.once('tauri://error', () => Message.error('打开标签预览窗口失败'));
+}
+
+// 切换并持久化主题色
+export async function setTheme(hex) {
+  cfg.themeColor = hex;
+  applyTheme(hex);
+  await setSetting('themeColor', hex);
+}
+
+// 是否用浏览器预览打印：开=浏览器打印对话框(browser)，关=静默直打(direct)
+// 与“打印方式”下拉共用 cfg.printMode；若当前是 tspl_file 则开关显示为“关”
+export function setBrowserPrint(on) {
+  cfg.printMode = on ? 'browser' : 'direct';
+  return setSetting('printMode', cfg.printMode);
+}
+
+// 当前 ticket / layout 变化时自动同步到独立窗口（仅主窗口 initStore 时注册）
+export function watchSyncToLabel() {
+  let t = null;
+  const fire = () => { clearTimeout(t); t = setTimeout(forwardToLabel, 120); };
+  watch(ticket, fire, { deep: true });
+  watch(layout, fire, { deep: true });
 }

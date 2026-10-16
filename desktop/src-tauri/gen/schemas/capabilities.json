@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"主窗口默认权限","local":true,"windows":["main"],"permissions":["core:default","sql:default","sql:allow-load","sql:allow-execute","sql:allow-select","sql:allow-close","shell:default","shell:allow-open"]}}
+{"default":{"identifier":"default","description":"主窗口与标签预览窗口默认权限","local":true,"windows":["main","label"],"permissions":["core:default","core:webview:allow-create-webview-window","core:window:allow-set-focus","sql:default","sql:allow-load","sql:allow-execute","sql:allow-select","sql:allow-close","shell:default","shell:allow-open"]}}

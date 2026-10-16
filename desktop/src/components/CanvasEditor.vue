@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, computed, ref, watch, onBeforeUnmount } from 'vue';
+import { reactive, computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { MM_PX, FIELD_CATALOG, makeEl } from '../layout';
 
 const props = defineProps({
@@ -24,13 +24,35 @@ watch(
   },
 );
 
-// 显示缩放：让内容盒宽约 560px
-const zoom = computed(() => 560 / (doc.Wd * MM_PX));
-const stageW = computed(() => doc.Wd * MM_PX * zoom.value);
-const stageH = computed(() => doc.Hd * MM_PX * zoom.value);
-const px = (mm) => mm * MM_PX * zoom.value;
+// —— 自适应缩放：默认整张标签铺满可视区(fit)，可再放大缩小 ——
+const stageWrap = ref(null);
+const zoomPct = ref(100); // 相对 fit 的百分比
+const availW = ref(0);
+const availH = ref(0);
+let ro = null;
+
+const fitScale = computed(() => {
+  if (!availW.value || !availH.value) return 1;
+  const s = Math.min(availW.value / (doc.Wd * MM_PX), availH.value / (doc.Hd * MM_PX));
+  return s > 0 ? s : 1;
+});
+const effScale = computed(() => fitScale.value * (zoomPct.value / 100));
+const stageW = computed(() => doc.Wd * MM_PX * effScale.value);
+const stageH = computed(() => doc.Hd * MM_PX * effScale.value);
+const px = (mm) => mm * MM_PX * effScale.value;
+
+function measureStage() {
+  const el = stageWrap.value;
+  if (!el) return;
+  availW.value = el.clientWidth - 16;
+  availH.value = el.clientHeight - 16;
+}
+function zoomIn() { zoomPct.value = Math.min(400, zoomPct.value + 15); }
+function zoomOut() { zoomPct.value = Math.max(40, zoomPct.value - 15); }
+function zoomFit() { zoomPct.value = 100; }
 
 const selected = ref(null);
+const editingId = ref(null); // 正在就地编辑文字的元素 id
 const sampleData = {
   nickname: '小锦鲤',
   goodsName: '【发饰自选】高颜值发绳',
@@ -69,7 +91,7 @@ function onMove(e) {
   if (!drag) return;
   const el = doc.elements.find((x) => x.id === drag.id);
   if (!el) return;
-  const dmm = { x: (e.clientX - drag.startX) / (MM_PX * zoom.value), y: (e.clientY - drag.startY) / (MM_PX * zoom.value) };
+  const dmm = { x: (e.clientX - drag.startX) / (MM_PX * effScale.value), y: (e.clientY - drag.startY) / (MM_PX * effScale.value) };
   if (drag.mode === 'move') {
     el.x = Math.max(0, mmRound(drag.ox + dmm.x));
     el.y = Math.max(0, mmRound(drag.oy + dmm.y));
@@ -84,7 +106,17 @@ function onUp() {
   window.removeEventListener('mouseup', onUp);
   pushChange();
 }
-onBeforeUnmount(onUp);
+onMounted(() => {
+  measureStage();
+  ro = new ResizeObserver(measureStage);
+  if (stageWrap.value) ro.observe(stageWrap.value);
+  window.addEventListener('keydown', onKeydown);
+});
+onBeforeUnmount(() => {
+  onUp();
+  if (ro) { ro.disconnect(); ro = null; }
+  window.removeEventListener('keydown', onKeydown);
+});
 
 function pushChange() {
   emit('update:modelValue', JSON.parse(JSON.stringify(doc)));
@@ -118,6 +150,46 @@ function removeSelected() {
 }
 const selEl = computed(() => doc.elements.find((e) => e.id === selected.value) || null);
 
+// 键盘微调：方向键移动 0.5mm（Shift 加速 2mm），Delete 删除
+function onKeydown(e) {
+  const el = selEl.value;
+  if (!el) return;
+  const t = document.activeElement;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+  const step = e.shiftKey ? 2 : 0.5;
+  let done = true;
+  if (e.key === 'ArrowLeft') el.x = Math.max(0, mmRound(el.x - step));
+  else if (e.key === 'ArrowRight') el.x = mmRound(el.x + step);
+  else if (e.key === 'ArrowUp') el.y = Math.max(0, mmRound(el.y - step));
+  else if (e.key === 'ArrowDown') el.y = mmRound(el.y + step);
+  else if (e.key === 'Delete' || e.key === 'Backspace') { removeSelected(); return; }
+  else done = false;
+  if (done) { e.preventDefault(); pushChange(); }
+}
+
+// —— 选中元素就地操作（悬浮工具条） ——
+function beginEdit(el) {
+  if (el.type !== 'text') return;
+  selected.value = el.id;
+  editingId.value = el.id;
+}
+function removeEl(el) {
+  doc.elements = doc.elements.filter((e) => e.id !== el.id);
+  if (selected.value === el.id) selected.value = null;
+  if (editingId.value === el.id) editingId.value = null;
+  pushChange();
+}
+function bumpFont(el, d) {
+  el.fontSize = Math.min(20, Math.max(1, mmRound((el.fontSize || 0) + d)));
+  pushChange();
+}
+function toggleBold(el) { el.bold = !el.bold; pushChange(); }
+function cycleAlign(el) {
+  el.align = el.align === 'left' ? 'center' : el.align === 'center' ? 'right' : 'left';
+  pushChange();
+}
+const alignIcon = (a) => (a === 'left' ? '⇤' : a === 'center' ? '↔' : '⇥');
+
 function save() {
   emit('save', JSON.parse(JSON.stringify(doc)));
 }
@@ -139,7 +211,16 @@ function save() {
     </div>
 
     <!-- 中：画布 -->
-    <div class="stage-wrap">
+    <div class="stage-col">
+      <div class="stage-tools">
+        <span class="st-hint">缩放</span>
+        <button class="st-btn" @click="zoomOut">−</button>
+        <span class="st-pct">{{ Math.round(zoomPct) }}%</span>
+        <button class="st-btn" @click="zoomIn">+</button>
+        <button class="st-btn wide" @click="zoomFit">适应</button>
+        <span class="st-tip">拖动移动 · 方向键微调(Shift 加速) · Delete 删除</span>
+      </div>
+    <div class="stage-wrap" ref="stageWrap">
       <div class="stage" :style="{ width: stageW + 'px', height: stageH + 'px' }" @click="selected = null">
         <div
           v-for="el in doc.elements"
@@ -148,12 +229,32 @@ function save() {
           :class="{ sel: el.id === selected }"
           :style="{ left: px(el.x) + 'px', top: px(el.y) + 'px', width: px(el.w) + 'px', height: el.type === 'divider' ? '2px' : px(el.h) + 'px' }"
           @mousedown="onElDown($event, el)"
+          @dblclick="beginEdit(el)"
         >
           <span v-if="el.type === 'divider'" class="div-line"></span>
+          <input
+            v-else-if="editingId === el.id && el.type === 'text'"
+            class="node-edit"
+            v-model="el.text"
+            @mousedown.stop
+            @change="pushChange"
+            @blur="editingId = null"
+          />
           <span v-else class="node-text" :style="{ fontSize: px(el.fontSize) + 'px', fontWeight: el.bold ? 700 : 400, textAlign: el.align }">{{ textOf(el) }}</span>
+          <div v-if="el.id === selected" class="node-tools" :class="{ below: px(el.y) < 28 }" @mousedown.stop>
+            <button v-if="el.type === 'text'" class="nt" title="编辑文字" @click.stop="beginEdit(el)">✎</button>
+            <template v-if="el.type !== 'divider'">
+              <button class="nt" title="缩小字号" @click.stop="bumpFont(el, -0.5)">A−</button>
+              <button class="nt" title="放大字号" @click.stop="bumpFont(el, 0.5)">A＋</button>
+              <button class="nt" :class="{ on: el.bold }" title="粗体" @click.stop="toggleBold(el)">B</button>
+              <button class="nt" title="对齐方式" @click.stop="cycleAlign(el)">{{ alignIcon(el.align) }}</button>
+            </template>
+            <button class="nt del" title="删除" @click.stop="removeEl(el)">✕</button>
+          </div>
           <i v-if="el.id === selected" class="handle" data-handle="se" @mousedown="onElDown($event, el)"></i>
         </div>
       </div>
+    </div>
     </div>
 
     <!-- 右：属性 -->
@@ -183,8 +284,10 @@ function save() {
             </select>
           </div>
         </template>
-        <div class="p-row"><label>X / Y</label><span class="p-val">{{ selEl.x }} / {{ selEl.y }}</span></div>
-        <div class="p-row"><label>宽 / 高</label><span class="p-val">{{ selEl.w }} / {{ selEl.h }}</span></div>
+        <div class="p-row"><label>X (mm)</label><input type="number" step="0.5" v-model.number="selEl.x" @change="pushChange" /></div>
+        <div class="p-row"><label>Y (mm)</label><input type="number" step="0.5" v-model.number="selEl.y" @change="pushChange" /></div>
+        <div class="p-row"><label>宽 (mm)</label><input type="number" step="0.5" v-model.number="selEl.w" @change="pushChange" /></div>
+        <div v-if="selEl.type !== 'divider'" class="p-row"><label>高 (mm)</label><input type="number" step="0.5" v-model.number="selEl.h" @change="pushChange" /></div>
         <button class="btn btn-danger" style="margin-top: 10px; width: 100%" @click="removeSelected">删除元素</button>
       </div>
       <button class="btn btn-success" style="margin-top: auto" @click="save">保存布局</button>
@@ -204,9 +307,17 @@ function save() {
 }
 .pal-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-weak); box-shadow: var(--shadow-xs); }
 
-.stage-wrap { flex: 1; display: flex; justify-content: center; align-items: flex-start; overflow: auto; padding: 8px; }
+.stage-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.stage-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--text-3); }
+.stage-tools .st-hint { font-weight: 600; color: var(--text-2); }
+.stage-tools .st-tip { margin-left: auto; }
+.st-btn { min-width: 26px; height: 24px; padding: 0 6px; border: 1px solid var(--border); background: #fff; border-radius: 6px; cursor: pointer; font-size: 14px; line-height: 1; color: var(--text-2); }
+.st-btn:hover { border-color: var(--primary); color: var(--primary); }
+.st-btn.wide { font-size: 12px; padding: 0 10px; }
+.st-pct { min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; color: var(--text); }
+.stage-wrap { flex: 1; min-width: 0; min-height: 440px; display: flex; overflow: auto; padding: 8px; background: #f7f8fa; border: 1px solid var(--border-weak); border-radius: 10px; }
 .stage {
-  position: relative; background: #fff; border: 1px solid var(--border-weak);
+  margin: auto; position: relative; background: #fff; border: 1px solid var(--border-weak);
   border-radius: 4px; box-shadow: var(--shadow-lg);
   background-image: linear-gradient(#f1f3f6 1px, transparent 1px), linear-gradient(90deg, #f1f3f6 1px, transparent 1px);
   background-size: 10px 10px;
@@ -220,8 +331,29 @@ function save() {
 .node-text { display: block; width: 100%; color: #000; line-height: 1.1; overflow: hidden; white-space: nowrap; }
 .div-line { display: block; width: 100%; border-top: 1px solid #000; }
 .handle {
-  position: absolute; right: -5px; bottom: -5px; width: 11px; height: 11px;
-  background: #fff; border: 2px solid var(--primary); border-radius: 50%; cursor: nwse-resize; box-shadow: var(--shadow-xs);
+  position: absolute; right: -6px; bottom: -6px; width: 14px; height: 14px;
+  background: #fff; border: 2px solid var(--primary); border-radius: 50%; cursor: nwse-resize; box-shadow: var(--shadow-sm);
+}
+
+/* 选中元素就地悬浮工具条 */
+.node-tools {
+  position: absolute; left: 50%; top: -28px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 2px; padding: 3px;
+  background: #1f2329; border-radius: 7px; box-shadow: var(--shadow-md); z-index: 6; white-space: nowrap;
+}
+.node-tools.below { top: auto; bottom: -30px; }
+.nt {
+  border: none; background: transparent; color: #e8eaed; cursor: pointer;
+  min-width: 22px; height: 22px; padding: 0 6px; border-radius: 5px;
+  font-size: 12px; line-height: 1; display: inline-flex; align-items: center; justify-content: center;
+}
+.nt:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.nt.on { background: var(--primary); color: #fff; }
+.nt.del:hover { background: #e5484d; color: #fff; }
+.node-edit {
+  position: absolute; inset: 0; box-sizing: border-box; width: 100%; height: 100%;
+  border: 1px solid var(--primary); border-radius: 3px; outline: none; padding: 0 3px;
+  font-family: inherit; background: #fff; color: #000;
 }
 
 .props-form { display: flex; flex-direction: column; gap: 10px; }

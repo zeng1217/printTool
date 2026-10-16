@@ -9,36 +9,39 @@ export function buildPrintCss(paperW, paperH) {
   return `
     @page {
       size: ${paperW}mm ${paperH}mm portrait;
-      margin: 0 !important;
+      margin: 0;
     }
-    html, body {
-      width: ${paperW}mm !important;
-      height: ${paperH}mm !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      background: #fff !important;
-      overflow: hidden !important;
-    }
-    body > *:not(#print-root) { display: none !important; }
-    #print-root {
-      display: block !important;
-      position: absolute !important;
-      left: 0 !important; top: 0 !important;
-      width: ${paperW}mm !important;
-      height: ${paperH}mm !important;
-      overflow: hidden !important;
-      margin: 0 !important; padding: 0 !important;
-    }
-    /* 内容盒按横向 Wd×Hd 排版，顺时针旋转 90° 填入纵向进纸 */
-    #printableTicket {
-      position: absolute !important;
-      left: 0 !important; top: 0 !important;
-      width: ${contentW}mm !important;
-      height: ${contentH}mm !important;
-      margin: 0 !important; padding: 0 !important;
-      border: none !important; box-shadow: none !important;
-      transform-origin: top left !important;
-      transform: rotate(90deg) translateY(-${contentH}mm) !important;
+    /* 以下规则仅在打印时生效，绝不影响实时页面（避免打印后主界面被隐藏“回不来”） */
+    @media print {
+      html, body {
+        width: ${paperW}mm !important;
+        height: ${paperH}mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+        overflow: hidden !important;
+      }
+      body > *:not(#print-root) { display: none !important; }
+      #print-root {
+        display: block !important;
+        position: absolute !important;
+        left: 0 !important; top: 0 !important;
+        width: ${paperW}mm !important;
+        height: ${paperH}mm !important;
+        overflow: hidden !important;
+        margin: 0 !important; padding: 0 !important;
+      }
+      /* 内容盒按横向 Wd×Hd 排版，馡时针旋转 90° 填入纵向进纸 */
+      #printableTicket {
+        position: absolute !important;
+        left: 0 !important; top: 0 !important;
+        width: ${contentW}mm !important;
+        height: ${contentH}mm !important;
+        margin: 0 !important; padding: 0 !important;
+        border: none !important; box-shadow: none !important;
+        transform-origin: top left !important;
+        transform: rotate(90deg) translateY(-${contentH}mm) !important;
+      }
     }
   `;
 }

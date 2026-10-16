@@ -1,23 +1,42 @@
 <script setup>
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import TicketCanvas from './components/TicketCanvas.vue';
+import LabelView from './components/LabelView.vue';
 import { cfg, running, layout, ticket, history, startMonitor, stopMonitor, initStore } from './store';
 
 const route = useRoute();
+// 独立标签预览窗口（label）只渲染裸视图，不初始化主窗口逻辑
+const bare = getCurrentWebviewWindow().label === 'label';
 
-// 侧栏折叠（本地持久化，下次启动保持）
-const collapsed = ref(localStorage.getItem('sidebarCollapsed') === '1');
+// 侧栏折叠：窗口缩到窄尺寸（≤ 断点）自动收起，变宽自动展开；手动按钮仍可在宽窗口下临时收起
+const COLLAPSE_BREAKPOINT = 880;
+const mq = window.matchMedia(`(max-width: ${COLLAPSE_BREAKPOINT}px)`);
+const collapsed = ref(mq.matches);
+function onMediaChange(e) { collapsed.value = e.matches; }
 function toggleSidebar() {
   collapsed.value = !collapsed.value;
-  localStorage.setItem('sidebarCollapsed', collapsed.value ? '1' : '0');
 }
+
+onMounted(() => {
+  if (bare) return;
+  initStore();
+  // addEventListener 在部分旧 Webview 只有 addListener，兼容处理
+  if (mq.addEventListener) mq.addEventListener('change', onMediaChange);
+  else mq.addListener(onMediaChange);
+});
+onBeforeUnmount(() => {
+  if (mq.removeEventListener) mq.removeEventListener('change', onMediaChange);
+  else mq.removeListener(onMediaChange);
+});
 
 const svg = (d) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 const navItems = [
   { key: 'desk', name: '打单台', to: '/desk', ico: svg('<path d="M6 9V4h12v5"/><rect x="4" y="9" width="16" height="7" rx="2"/><path d="M8 16h8v4H8z"/>') },
   { key: 'spec', name: '打印规格', to: '/spec', ico: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/>') },
   { key: 'history', name: '历史订单', to: '/history', ico: svg('<path d="M4 5h16M4 12h16M4 19h10"/>') },
+  { key: 'settings', name: '设置', to: '/settings', ico: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>') },
 ];
 
 const meta = computed(() => route.meta || {});
@@ -27,7 +46,8 @@ onMounted(initStore);
 </script>
 
 <template>
-  <div class="app-shell">
+  <LabelView v-if="bare" />
+  <div v-else class="app-shell">
     <!-- 左侧导航 -->
     <aside class="sidebar" :class="{ collapsed }">
       <div class="brand">
