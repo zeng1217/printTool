@@ -236,47 +236,135 @@ fn tcp_send(addr: &str, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// Windows：经系统假脱机以 RAW DATA= 类型直发任意队列（不弹对话框）
+/// Windows：经系统假脱机 winspool 以 RAW 数据类型直发任意队列（不弹对话框）。
+/// 这里不依赖 windows crate 的绑定，直接按 Win32 原始签名声明 FFI，避免绑定风格差异导致编译失败。
 #[cfg(windows)]
 mod windows_back {
-    use windows::core::{HSTRING, PCWSTR};
-    use windows::Win32::Foundation::HANDLE;
-    use windows::Win32::Graphics::Printing::{
-        close_printer, enum_printers_w, end_doc_printer, end_page_printer, open_printer_w,
-        start_doc_printer_w, start_page_printer, write_printer_w, DOC_INFO_1W,
-        ENUM_PRINTER_LEVEL1, OPEN_PRINTER_DEFAULTSW, PRINTER_ACCESS_USE, PRINTER_INFO_2W,
-    };
+    use std::ffi::c_void;
+    use std::ptr;
 
-    fn ok_to_string(e: windows::core::Error) -> String {
-        e.to_string()
+    type HPrinter = *mut c_void;
+    type BOOL = i32;
+    type DWORD = u32;
+    type LPWSTR = *mut u16;
+    type LPCWSTR = *const u16;
+    type LPBYTE = *mut u8;
+    type LPDWORD = *mut u32;
+
+    #[repr(C)]
+    struct DocInfo1W {
+        pDocName: LPWSTR,
+        pOutputFile: LPWSTR,
+        pDatatype: LPWSTR,
     }
 
-    /// 枚举本机打印机队列名
+    // PRINTER_INFO_2W 字段顺序必须与 Win32 定义严格一致（13 个指针 + 8 个 DWORD）
+    #[allow(dead_code)]
+    #[repr(C)]
+    struct PrinterInfo2W {
+        pServerName: LPWSTR,
+        pPrinterName: LPWSTR,
+        pShareName: LPWSTR,
+        pPortName: LPWSTR,
+        pDriverName: LPWSTR,
+        pComment: LPWSTR,
+        pLocation: LPWSTR,
+        pDevMode: *mut c_void,
+        pSepFile: LPWSTR,
+        pPrintProcessor: LPWSTR,
+        pDatatype: LPWSTR,
+        pParameters: LPWSTR,
+        pSecurity: *mut c_void,
+        Attributes: DWORD,
+        Priority: DWORD,
+        DefaultPriority: DWORD,
+        StartTime: DWORD,
+        UntilTime: DWORD,
+        Status: DWORD,
+        cJobs: DWORD,
+        AveragePPM: DWORD,
+    }
+
+    const PRINTER_ENUM_LOCAL: DWORD = 0x0000_0002;
+    const PRINTER_ENUM_CONNECTIONS: DWORD = 0x0000_0004;
+
+    #[link(name = "winspool")]
+    extern "system" {
+        fn EnumPrintersW(
+            flags: DWORD,
+            name: LPWSTR,
+            level: DWORD,
+            pprinterenum: LPBYTE,
+            cbbuf: DWORD,
+            pcbneeded: LPDWORD,
+            pcreturnd: LPDWORD,
+        ) -> BOOL;
+        fn OpenPrinterW(name: LPCWSTR, hprinter: *mut HPrinter, pdefault: *mut c_void) -> BOOL;
+        fn StartDocPrinterW(hprinter: HPrinter, level: DWORD, pdocinfo: *const DocInfo1W) -> DWORD;
+        fn StartPagePrinter(hprinter: HPrinter) -> BOOL;
+        fn WritePrinter(
+            hprinter: HPrinter,
+            pbuf: *const c_void,
+            cbprint: DWORD,
+            pcbwritten: LPDWORD,
+        ) -> BOOL;
+        fn EndPagePrinter(hprinter: HPrinter) -> BOOL;
+        fn EndDocPrinter(hprinter: HPrinter) -> BOOL;
+        fn ClosePrinter(hprinter: HPrinter) -> BOOL;
+    }
+
+    /// &str -> 以 null 结尾的 UTF-16 缓冲
+    fn wide(s: &str) -> Vec<u16> {
+        s.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+
+    /// 读 null 结尾的 UTF-16 指针为 String
+    unsafe fn read_wide(p: LPCWSTR) -> String {
+        if p.is_null() {
+            return String::new();
+        }
+        let mut units = Vec::new();
+        let mut i = 0isize;
+        loop {
+            let c = unsafe { *p.offset(i) };
+            if c == 0 {
+                break;
+            }
+            units.push(c);
+            i += 1;
+        }
+        String::from_utf16_lossy(&units)
+    }
+
+    /// 枚举本机打印机队列名（本地 + 连接）
     pub fn enum_printers() -> Vec<String> {
         let mut out = Vec::new();
-        let mut need = 0u32;
-        let mut used = 0u32;
-        let mut n = 0u32;
+        let flags = PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS;
+        let mut need: DWORD = 0;
+        let mut ret: DWORD = 0;
         unsafe {
-            let _ = enum_printers_w(ENUM_PRINTER_LEVEL1, None, &mut need, &mut used, &mut n);
+            // 第一次传空缓冲获取所需字节数（预期返回 0）
+            let _ = EnumPrintersW(flags, ptr::null_mut(), 2, ptr::null_mut(), 0, &mut need, &mut ret);
+            if need == 0 {
+                return out;
+            }
             let mut buf: Vec<u8> = vec![0; need as usize];
-            if enum_printers_w(
-                ENUM_PRINTER_LEVEL1,
-                Some(&mut buf),
+            let ok = EnumPrintersW(
+                flags,
+                ptr::null_mut(),
+                2,
+                buf.as_mut_ptr(),
+                need,
                 &mut need,
-                &mut used,
-                &mut n,
-            )
-            .is_ok()
-                && n > 0
-            {
-                let base = buf.as_ptr() as *const PRINTER_INFO_2W;
-                for i in 0..n as isize {
+                &mut ret,
+            );
+            if ok != 0 && ret > 0 {
+                let base = buf.as_ptr() as *const PrinterInfo2W;
+                for i in 0..ret as isize {
                     let info = &*base.offset(i);
-                    if let Some(s) = info.pPrinterName {
-                        if let Ok(w) = s.to_string() {
-                            out.push(w);
-                        }
+                    let name = read_wide(info.pPrinterName);
+                    if !name.is_empty() {
+                        out.push(name);
                     }
                 }
             }
@@ -286,7 +374,6 @@ mod windows_back {
 
     /// RAW 直发到指定（或默认）队列
     pub fn print_raw(name: Option<&str>, bytes: &[u8]) -> Result<(), String> {
-        // 未指定则取枚举到的第一个队列（建议前端总是显式传 usb:队列名）
         let printer = match name {
             Some(s) => s.to_string(),
             None => enum_printers()
@@ -294,39 +381,39 @@ mod windows_back {
                 .next()
                 .ok_or("未找到任何打印机队列".to_string())?,
         };
+        let wname = wide(&printer);
+        let wdata = wide("RAW");
+        let wdoc = wide("打单标签");
         unsafe {
-            let mut hpr: HANDLE = HANDLE::default();
-            let datatype = HSTRING::from("RAW");
-            let oi = OPEN_PRINTER_DEFAULTSW {
-                pDatatype: PCWSTR(datatype.as_ptr()),
-                DesiredAccess: PRINTER_ACCESS_USE,
+            let mut hpr: HPrinter = ptr::null_mut();
+            if OpenPrinterW(wname.as_ptr(), &mut hpr, ptr::null_mut()) == 0 {
+                return Err("OpenPrinter 失败（队列名无效或无权限）".to_string());
+            }
+            let doc = DocInfo1W {
+                pDocName: wdoc.as_ptr() as LPWSTR,
+                pOutputFile: ptr::null_mut(),
+                pDatatype: wdata.as_ptr() as LPWSTR,
             };
-            let wname = HSTRING::from(&printer);
-            open_printer_w(wname.as_pcwstr(), Some(&oi), &mut hpr).map_err(ok_to_string)?;
-            let doc_name = HSTRING::from("打单标签");
-            let raw = HSTRING::from("RAW");
-            let doc = DOC_INFO_1W {
-                pDocName: PCWSTR(doc_name.as_ptr()),
-                pOutputFile: PCWSTR::null(),
-                pDatatype: PCWSTR(raw.as_ptr()),
-            };
-            let job = start_doc_printer_w(hpr, 1, &doc);
+            let job = StartDocPrinterW(hpr, 1, &doc);
             if job == 0 {
-                let _ = close_printer(hpr);
+                ClosePrinter(hpr);
                 return Err("StartDocPrinter 失败（请检查队列是否允许 RAW 数据类型）".to_string());
             }
-            if let Err(e) = start_page_printer(hpr) {
-                let _ = windows::Win32::Graphics::Printing::abort_doc_printer(hpr);
-                let _ = close_printer(hpr);
-                return Err(format!("StartPage 失败: {e}"));
+            if StartPagePrinter(hpr) == 0 {
+                EndDocPrinter(hpr);
+                ClosePrinter(hpr);
+                return Err("StartPage 失败".to_string());
             }
-            let mut written = 0u32;
-            let r = write_printer_w(hpr, bytes, &mut written);
-            let _ = end_page_printer(hpr);
-            let _ = end_doc_printer(hpr);
-            let _ = close_printer(hpr);
-            r.map(|_| ()).map_err(ok_to_string)
+            let mut written: DWORD = 0;
+            let wres = WritePrinter(hpr, bytes.as_ptr() as *const c_void, bytes.len() as DWORD, &mut written);
+            EndPagePrinter(hpr);
+            EndDocPrinter(hpr);
+            ClosePrinter(hpr);
+            if wres == 0 {
+                return Err("WritePrinter 失败".to_string());
+            }
         }
+        Ok(())
     }
 }
 
