@@ -13,10 +13,10 @@
     "windows": [
       {
         "title": "抖店监听打单",
-        "width": 1040,
-        "height": 800,
-        "minWidth": 880,
-        "minHeight": 640,
+        "width": 1180,
+        "height": 820,
+        "minWidth": 720,
+        "minHeight": 560,
         "resizable": true
       }
     ],
