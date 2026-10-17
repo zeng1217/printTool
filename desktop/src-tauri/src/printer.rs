@@ -77,7 +77,10 @@ fn value_of(el: &LayEl, data: &serde_json::Value) -> String {
 /// 生成完整 TSPL 指令（中文用 TSS24.BF2 点阵字体，按 GB18030 编码发出）
 pub fn build_tspl(layout: &LabelLayout, data: &serde_json::Value) -> Vec<u8> {
     let mut s = String::new();
-    s.push_str(&format!("SIZE {} mm,{} mm\r\n", layout.paper_w, layout.paper_h));
+    // 内容盒 wd×hd 就是预览里“横向正确”的物理打印框（=进纸长×进纸宽），
+    // 元素坐标 x∈[0,wd] y∈[0,hd] 均相对它，故 SIZE 必须用 wd,hd 而非 paper_w,paper_h，
+    // 否则横向内容被塞进竖向尺寸→方向错、坐标越界（打印机响而不出）。
+    s.push_str(&format!("SIZE {} mm,{} mm\r\n", layout.wd, layout.hd));
     s.push_str("GAP 0 mm,0 mm\r\n");
     s.push_str("DIRECTION 1\r\n");
     s.push_str("REFERENCE 0,0\r\n");
@@ -443,7 +446,7 @@ mod tests {
         let data = serde_json::json!({ "nickname": "张三", "orderSeq": "第1单" });
         let bytes = build_tspl(&layout, &data);
         let text = encoding_rs::GB18030.decode(&bytes).0.into_owned();
-        assert!(text.contains("SIZE 50 mm,70 mm"));
+        assert!(text.contains("SIZE 70 mm,50 mm")); // SIZE 取内容盒 wd×hd（横），非 paper_w×paper_h（竖）
         assert!(text.contains("TEXT 24,32,\"TSS24.BF2\",0,2,2,\"张三\"")); // 3mm*8=24, 4mm*8=32, 6.4mm→倍率2
         assert!(text.contains("FILL 16,96,512,2"));
         assert!(text.contains("感谢下单"));
