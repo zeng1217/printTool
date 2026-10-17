@@ -41,23 +41,12 @@ build() {
   git config credential.helper osxkeychain
   MSG="${1:-chore: 重新打包 Windows exe $(date '+%Y-%m-%d %H:%M')}"
 
-  echo "==> 1/4 提交改动"
-  git add -A
-  git commit -m "$MSG" || echo "   （无新改动，跳过提交）"
-
   PUSH_URL="$REMOTE_URL"
   if [ -n "${GH_TOKEN:-}" ]; then
     PUSH_URL="https://${OWNER}:${GH_TOKEN}@github.com/${OWNER}/${REPO}.git"
   fi
 
-  echo "==> 2/4 推送 ${BRANCH}"
-  if [ -n "${GH_TOKEN:-}" ]; then
-    git -c credential.helper= push "$PUSH_URL" "$BRANCH"
-  else
-    git push "$REMOTE_URL" "$BRANCH"
-  fi
-
-  echo "==> 3/4 计算并推送新 tag"
+  echo "==> 1/5 计算新版本 tag"
   LAST_TAG=$( { git tag --list 'v*'; git ls-remote --tags "$REMOTE_URL" 2>/dev/null | sed -E 's#.*refs/tags/##; s#\^{}##'; } 2>/dev/null | grep -E '^v[0-9]' | sort -V | tail -1 )
   if [ -z "$LAST_TAG" ]; then
     NEW_TAG="v0.1.0"
@@ -66,7 +55,27 @@ build() {
     NUM=$(echo "$LAST_TAG"  | grep -oE '[0-9]+$')
     NEW_TAG="${PREFIX}.$((NUM + 1))"
   fi
-  echo "   上一个 tag: ${LAST_TAG:-无}  →  新 tag: ${NEW_TAG}"
+  VER="${NEW_TAG#v}"
+  echo "   上一个 tag: ${LAST_TAG:-无}  →  新 tag: ${NEW_TAG}（应用版本 ${VER}）"
+
+  echo "==> 2/5 把版本号戳进配置（使左上角显示与 tag 一致）"
+  perl -0pi -e "s/\"version\"\s*:\s*\"[^\"]*\"/\"version\": \"$VER\"/" desktop/src-tauri/tauri.conf.json
+  perl -0pi -e "s/\"version\"\s*:\s*\"[^\"]*\"/\"version\": \"$VER\"/" desktop/package.json
+  perl -0pi -e "s/version\s*=\s*\"[^\"]*\"/version = \"$VER\"/"            desktop/src-tauri/Cargo.toml
+  echo "   tauri.conf.json / package.json / Cargo.toml → ${VER}"
+
+  echo "==> 3/5 提交改动"
+  git add -A
+  git commit -m "$MSG" || echo "   （无新改动，跳过提交）"
+
+  echo "==> 4/5 推送 ${BRANCH}"
+  if [ -n "${GH_TOKEN:-}" ]; then
+    git -c credential.helper= push "$PUSH_URL" "$BRANCH"
+  else
+    git push "$REMOTE_URL" "$BRANCH"
+  fi
+
+  echo "==> 5/5 打 tag 并推送（触发云端构建）"
   git tag "$NEW_TAG"
   if [ -n "${GH_TOKEN:-}" ]; then
     git -c credential.helper= push "$PUSH_URL" "$NEW_TAG"
@@ -74,11 +83,12 @@ build() {
     git push "$REMOTE_URL" "$NEW_TAG"
   fi
 
-  echo "==> 4/4 完成，云端开始构建"
+  echo "==> 完成，云端开始构建 ${NEW_TAG}"
   echo
   echo "去这里看进度 / 下载 exe（约 5~8 分钟）："
   echo "  https://github.com/${OWNER}/${REPO}/actions"
   echo "构建变绿后 → Artifacts → 下载 doudian-print-windows → 解压得到 -setup.exe"
+  echo "装好后左上角应显示 v${VER}，即代表本次更新生效。"
 }
 
 clean() {

@@ -1,6 +1,6 @@
 [package]
 name = "标签打印"
-version = "1.0.0"
+version = "0.1.12"
 description = "抖店订单监听与标签打印"
 edition = "2021"
 

@@ -2,11 +2,15 @@
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { getVersion } from '@tauri-apps/api/app';
 import TicketCanvas from './components/TicketCanvas.vue';
 import LabelView from './components/LabelView.vue';
 import { cfg, running, layout, ticket, historyTotal, startMonitor, stopMonitor, initStore } from './store';
 
 const route = useRoute();
+// 左上角显示真实构建版本（取 tauri.conf.json 的 version，由 build-exe.sh 每次打包戳成对应 tag），
+// 用于确认装的是哪一版；不再写死 v0.1.0
+const appVer = ref('加载中…');
 // 独立标签预览窗口（label）只渲染裸视图，不初始化主窗口逻辑
 const bare = getCurrentWebviewWindow().label === 'label';
 
@@ -21,6 +25,7 @@ function toggleSidebar() {
 
 onMounted(() => {
   if (bare) return;
+  getVersion().then((v) => { appVer.value = 'v' + v; }).catch(() => { appVer.value = 'v?'; });
   initStore();
   // addEventListener 在部分旧 Webview 只有 addListener，兼容处理
   if (mq.addEventListener) mq.addEventListener('change', onMediaChange);
@@ -54,7 +59,7 @@ onMounted(initStore);
         <div class="logo">打</div>
         <div>
           <div class="name">抖店监听打单</div>
-          <div class="ver">v0.1.0</div>
+          <div class="ver">{{ appVer }}</div>
         </div>
       </div>
       <div class="nav-group-label">工作台</div>
