@@ -167,7 +167,15 @@ pub fn send_raw(conn: &str, bytes: &[u8]) -> Result<(), String> {
         return tcp_send(rest, bytes);
     }
     if let Some(q) = conn.strip_prefix("usb:") {
-        return queue_send(q, bytes);
+        // Windows 上 lpr 不存在，USB 队列必须走 winspool WritePrinter RAW；macOS/Linux 才用 lpr -o raw
+        #[cfg(windows)]
+        {
+            return windows_back::print_raw(Some(q), bytes);
+        }
+        #[cfg(not(windows))]
+        {
+            return queue_send(q, bytes);
+        }
     }
     #[cfg(windows)]
     {
