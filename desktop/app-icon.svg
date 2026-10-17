@@ -1,27 +1,41 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#2b2f36"/>
-      <stop offset="1" stop-color="#1f2329"/>
+      <stop offset="0" stop-color="#3b7bff"/>
+      <stop offset="1" stop-color="#1a3fe0"/>
     </linearGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="20" flood-color="#0b1f6b" flood-opacity="0.35"/>
+    </filter>
   </defs>
 
-  <!-- macOS 规范:四周留透明边距,背景为居中内缩瓦片 (~78% 画布) -->
+  <!-- macOS 规范:居中内缩瓦片,四周留透明边距 -->
   <rect x="112" y="112" width="800" height="800" rx="180" ry="180" fill="url(#bg)"/>
 
-  <g transform="translate(512 512) scale(0.9) translate(-512 -512)">
-    <!-- 出纸:顶部锯齿撕口的白色小票 -->
-    <path d="M368 300
-             l24 -34 l24 34 l24 -34 l24 34 l24 -34 l24 34 l24 -34 l24 34
-             l24 -34 l24 34 l24 -34 l24 34
-             L656 588 L368 588 Z"
+  <!-- 白色实心小票(顶部锯齿撕口) -->
+  <g filter="url(#sh)">
+    <path d="M336 340
+             l22 -26 l22 26 l22 -26 l22 26 l22 -26 l22 26 l22 -26 l22 26
+             l22 -26 l22 26 l22 -26 l22 26 l22 -26 l22 26 l22 -26 l22 26
+             L688 716 Q688 744 660 744 L364 744 Q336 744 336 716 Z"
           fill="#ffffff"/>
+  </g>
 
-    <!-- 票面:两条文字线 -->
-    <rect x="412" y="372" width="200" height="20" rx="10" fill="#1f2329"/>
-    <rect x="412" y="416" width="132" height="20" rx="10" fill="#1f2329"/>
-
-    <!-- 打印机机身 -->
-    <rect x="288" y="560" width="448" height="224" rx="40" fill="#ffffff"/>
+  <!-- 票面内容:蓝色文字线 + 条形码 -->
+  <g stroke="#2f6bff" stroke-linecap="round" fill="none">
+    <path d="M388 452 H636" stroke-width="26"/>
+    <path d="M388 512 H560" stroke-width="26"/>
+    <g stroke-width="18">
+      <path d="M392 566 V676"/>
+      <path d="M416 566 V676"/>
+      <path d="M436 566 V676"/>
+      <path d="M468 566 V676"/>
+      <path d="M492 566 V676"/>
+      <path d="M512 566 V676"/>
+      <path d="M544 566 V676"/>
+      <path d="M568 566 V676"/>
+      <path d="M592 566 V676"/>
+      <path d="M628 566 V676"/>
+    </g>
   </g>
 </svg>

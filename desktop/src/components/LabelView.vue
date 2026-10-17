@@ -43,6 +43,12 @@ onBeforeUnmount(() => {
   if (unlisten) unlisten();
   if (ro) ro.disconnect();
 });
+
+// 打印：本窗口为裸窗口不跑 store，回传主窗口用当前票面执行
+function printLabel() {
+  if (!localLayout.value) return;
+  emit('label-print');
+}
 </script>
 
 <template>
@@ -51,6 +57,7 @@ onBeforeUnmount(() => {
       <span class="lw-dot"></span>
       <span>标签实时预览</span>
       <span v-if="localLayout" class="lw-dim">{{ localLayout.paperW }}×{{ localLayout.paperH }}mm</span>
+      <button class="lw-print" :disabled="!localLayout" @click="printLabel">🖨 打印</button>
     </div>
     <div class="lw-stage">
       <div
@@ -73,6 +80,14 @@ onBeforeUnmount(() => {
   background: #fff; border-bottom: 1px solid var(--border-weak);
 }
 .lw-dim { margin-left: auto; color: var(--text-3); font-weight: 400; font-variant-numeric: tabular-nums; }
+.lw-print {
+  margin-left: 12px; border: 1px solid var(--primary); background: var(--primary); color: #fff;
+  border-radius: 8px; padding: 7px 18px; font-size: 14px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+  box-shadow: 0 2px 6px var(--primary-ring);
+}
+.lw-print:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.lw-print:active { transform: translateY(1px); }
+.lw-print:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
 .lw-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px rgba(0, 180, 90, 0.15); }
 .lw-stage { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 14px; }
 .lw-scale { flex-shrink: 0; transform-origin: center center; box-shadow: var(--shadow-lg); border-radius: 4px; }

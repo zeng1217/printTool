@@ -4,7 +4,7 @@ import CanvasEditor from '../components/CanvasEditor.vue';
 import TicketCanvas from '../components/TicketCanvas.vue';
 import {
   cfg, layout, printerList, saveSettings, onLayoutSave,
-  refreshPrinters, onConnKindChange, doPrint,
+  refreshPrinters, onConnKindChange, doPrint, resetLayout,
 } from '../store';
 
 // 窗口缩到很窄时（≤ 断点）不渲染拖拽编辑器，仅展示已保存布局的静态预览
@@ -100,7 +100,12 @@ const previewData = {
 
   <!-- 拖拽排版画布 -->
   <div class="section">
-    <div class="section-title"><span class="t-left"><span class="bar"></span>拖拽排版画布</span></div>
+    <div class="section-title">
+      <span class="t-left"><span class="bar"></span>拖拽排版画布</span>
+      <a-popconfirm v-if="!tiny" content="将丢弃当前排版并恢复默认模板，确认？" type="warning" ok-text="恢复" @ok="resetLayout">
+        <a-button size="small">恢复默认布局</a-button>
+      </a-popconfirm>
+    </div>
     <div class="section-desc">左侧添加字段/文字/分割线，中间拖动与缩放，右侧调属性，完成后点“保存布局”</div>
     <CanvasEditor v-if="!tiny" v-model="layout" :paper-w="cfg.paperW" :paper-h="cfg.paperH" @save="onLayoutSave" />
     <div v-else class="layout-readonly">

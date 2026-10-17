@@ -1,6 +1,6 @@
 [package]
-name = "doudian-print"
-version = "0.1.0"
+name = "标签打印"
+version = "1.0.0"
 description = "抖店订单监听与标签打印"
 edition = "2021"
 
@@ -15,6 +15,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }

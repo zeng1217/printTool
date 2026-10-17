@@ -46,6 +46,7 @@ export function applyTheme(hex) {
   set('--primary-hover', hover);
   set('--primary-active', active);
   set('--primary-weak', mix(base, '#ffffff', 0.9));
+  set('--primary-lite', mix(base, '#ffffff', 0.22)); // logo / 区块条 / 主按钮渐变的浅端（hex）
   set('--primary-ring', `rgba(${r}, ${g}, ${b}, 0.16)`);
 
   // Arco 主色变量：--primary-N / --arcoblue-N 被 rgb(var(...)) 消费，必须是 "R, G, B" 三元组（非 hex）；

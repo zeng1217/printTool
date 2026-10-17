@@ -4,7 +4,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, emitTo } from '@tauri-apps/api/event';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import Message from '@arco-design/web-vue/es/message';
-import { initDb, saveOrder, listOrders, getSetting, setSetting } from './db';
+import { initDb, saveOrder, listOrdersPaged, getSetting, setSetting, exportOrdersCsv, buildOrdersCsv } from './db';
+import { save } from '@tauri-apps/plugin-dialog';
 import { buildPrintCss, printTicket } from './print';
 import { loadLayout, saveLayout, defaultLayout } from './layout';
 import { applyTheme } from './theme';
@@ -41,6 +42,11 @@ export const ticket = reactive({
 
 export const history = ref([]);
 export const keyword = ref('');
+// 分页与筛选（历史订单）
+export const historyPage = ref(1);
+export const historyPageSize = ref(20);
+export const historyTotal = ref(0);
+export const historyTimeRange = ref([]); // [ 'YYYY-MM-DD', 'YYYY-MM-DD' ]
 export const printerList = ref([]);
 
 // 画布布局（完全接管票据结构与打印渲染）
@@ -67,7 +73,53 @@ export function loadSettingsToTicket() {
 }
 
 export async function refreshHistory() {
-  history.value = await listOrders(keyword.value.trim());
+  const [from, to] = historyTimeRange.value || [];
+  const { rows, total } = await listOrdersPaged({
+    keyword: keyword.value.trim(),
+    page: historyPage.value,
+    pageSize: historyPageSize.value,
+    timeFrom: from || '',
+    timeTo: to || '',
+  });
+  history.value = rows;
+  historyTotal.value = total;
+  // 当前页超出范围（如删除/筛选后）回到首页重查
+  const maxPage = Math.max(1, Math.ceil(total / historyPageSize.value));
+  if (historyPage.value > maxPage) { historyPage.value = maxPage; await refreshHistory(); }
+}
+
+// 筛选条件变化（关键字/时间范围/页大小）：回到第 1 页再查
+export function searchHistory() {
+  historyPage.value = 1;
+  return refreshHistory();
+}
+
+// 手动导出：弹系统“保存”对话框让用户选存放地址，再写入所选路径
+export async function exportCsvManual() {
+  try {
+    let target = await save({
+      title: '导出订单 CSV',
+      defaultPath: 'orders.csv',
+      filters: [{ name: 'CSV 表格', extensions: ['csv'] }],
+    });
+    if (!target) return; // 用户取消
+    if (!/\.csv$/i.test(target)) target += '.csv'; // 避免无扩展名
+    const content = await buildOrdersCsv();
+    const p = await invoke('write_file_at', { path: target, content });
+    Message.success(`已导出：${p}`);
+  } catch (e) {
+    Message.error('导出失败：' + e);
+  }
+}
+
+// 用系统文件管理器打开数据目录
+export async function openDataDir() {
+  try {
+    const p = await invoke('open_app_data_dir');
+    Message.success(`数据目录：${p}`);
+  } catch (e) {
+    Message.error('打开失败：' + e);
+  }
 }
 
 // 统一把「实时订单」和「历史行」归一成票据数据
@@ -113,6 +165,7 @@ export async function onCaptured(payload) {
   const isNew = await saveOrder(payload);
   if (isNew) {
     await refreshHistory();
+    try { await exportOrdersCsv(); } catch (e) { /* 写文本镜像失败不影响主流程 */ }
     if (cfg.autoPrint) setTimeout(doPrint, 200);
   }
 }
@@ -157,6 +210,13 @@ export async function onLayoutSave(l) {
   Message.success('布局已保存');
 }
 
+// 恢复默认布局模板（丢弃当前排版并立即保存）
+export async function resetLayout() {
+  layout.value = defaultLayout(cfg.paperW, cfg.paperH);
+  await saveLayout(layout.value);
+  Message.success('已恢复默认布局');
+}
+
 export function simulate() {
   onCaptured({
     orderSeq: '第?单(模拟)',
@@ -187,6 +247,8 @@ export async function initStore() {
   loadSettingsToTicket();
   layout.value = await loadLayout(cfg.paperW, cfg.paperH);
   await refreshHistory();
+  // 启动时全量重建可读文本镜像 orders.csv（与 SQLite 保持一致）
+  try { await exportOrdersCsv(); } catch (e) { /* 忽略写失败 */ }
 
   running.value = await invoke('monitor_status');
 
@@ -198,6 +260,8 @@ export async function initStore() {
 
   // 独立标签预览窗口：初次请求 + 数据变化时推送当前票面（仅主窗口运行）
   await listen('ticket-request', () => forwardToLabel());
+  // 独立预览窗口里的“打印”按钮：回传主窗口用当前票面执行打印
+  await listen('label-print', () => doPrint());
   watchSyncToLabel();
 }
 
@@ -218,7 +282,7 @@ export async function openLabelWindow() {
   }
   const w = new WebviewWindow('label', {
     title: '标签预览',
-    width: 340,
+    width: 510,
     height: 480,
     alwaysOnTop: true,
     resizable: true,

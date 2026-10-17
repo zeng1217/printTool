@@ -229,6 +229,7 @@ function save() {
           :class="{ sel: el.id === selected }"
           :style="{ left: px(el.x) + 'px', top: px(el.y) + 'px', width: px(el.w) + 'px', height: el.type === 'divider' ? '2px' : px(el.h) + 'px' }"
           @mousedown="onElDown($event, el)"
+          @click.stop
           @dblclick="beginEdit(el)"
         >
           <span v-if="el.type === 'divider'" class="div-line"></span>

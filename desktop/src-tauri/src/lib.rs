@@ -106,18 +106,57 @@ fn print_label(
     }
 }
 
+/// 把文本内容写到应用数据目录下的文件（如 orders.csv），供用户用记事本/Excel 直接查看数据
+#[tauri::command]
+fn write_app_file(app: AppHandle, name: String, content: String) -> Result<String, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(&name); // name 由前端固定传入（orders.csv），不做外部路径拼接
+    std::fs::write(&path, content.as_bytes()).map_err(|e| e.to_string())?;
+    Ok(path.display().to_string())
+}
+
+/// 用系统默认文件管理器打开应用数据目录（macOS=open / Windows=explorer / Linux=xdg-open）
+#[tauri::command]
+fn open_app_data_dir(app: AppHandle) -> Result<String, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let path = dir.display().to_string();
+    #[cfg(target_os = "macos")]
+    let mut cmd = { let mut c = std::process::Command::new("open"); c.arg(&path); c };
+    #[cfg(target_os = "windows")]
+    let mut cmd = { let mut c = std::process::Command::new("explorer"); c.arg(&path); c };
+    #[cfg(target_os = "linux")]
+    let mut cmd = { let mut c = std::process::Command::new("xdg-open"); c.arg(&path); c };
+    let _ = cmd.spawn(); // 忽略退出码：explorer 成功时也常返回非零
+    Ok(path)
+}
+
+/// 把文本写到用户选定的任意路径（配合保存对话框“导出”）
+#[tauri::command]
+fn write_file_at(path: String, content: String) -> Result<String, String> {
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(&path, content.as_bytes()).map_err(|e| e.to_string())?;
+    Ok(path)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(MonitorState::default())
         .invoke_handler(tauri::generate_handler![
             start_monitor,
             stop_monitor,
             monitor_status,
             list_printers,
-            print_label
+            print_label,
+            write_app_file,
+            open_app_data_dir,
+            write_file_at
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

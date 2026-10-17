@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import TicketCanvas from './components/TicketCanvas.vue';
 import LabelView from './components/LabelView.vue';
-import { cfg, running, layout, ticket, history, startMonitor, stopMonitor, initStore } from './store';
+import { cfg, running, layout, ticket, historyTotal, startMonitor, stopMonitor, initStore } from './store';
 
 const route = useRoute();
 // 独立标签预览窗口（label）只渲染裸视图，不初始化主窗口逻辑
@@ -70,7 +70,7 @@ onMounted(initStore);
           <span class="ico" v-html="item.ico"></span>
           <span class="label">{{ item.name }}</span>
           <span v-if="item.key === 'desk' && running" class="badge live">运行中</span>
-          <span v-if="item.key === 'history' && history.length" class="badge">{{ history.length }}</span>
+          <span v-if="item.key === 'history' && historyTotal" class="badge">{{ historyTotal }}</span>
         </router-link>
       </nav>
       <div class="side-bottom">
